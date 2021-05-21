@@ -56,7 +56,7 @@ int main(int argc, char** argv)
 		printf("Open winlogin process token handle failed, %d\n", GetLastError());
 		return 0;
 	}
-	//TOKEN_ADJUST_PRIVILEGES
+
 	printf("duplicating winlogin token\n");
 	HANDLE dupToken = NULL;
 	ret = DuplicateTokenEx(winloginToken, TOKEN_ALL_ACCESS, NULL, SecurityImpersonation, TokenPrimary, &dupToken);
@@ -102,8 +102,6 @@ int main(int argc, char** argv)
 
 	printf("impersonating winlogin\n");
 	ret = ImpersonateLoggedOnUser(dupToken);
-	//HANDLE hThread = GetCurrentThread();
-	//ret = SetThreadToken(&hThread, dupToken);
 	if (ret == FALSE) {
 		printf("ImpersonateLoggedOnUser failed, %d\n", GetLastError());
 		return 0;
