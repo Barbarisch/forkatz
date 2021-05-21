@@ -43,7 +43,7 @@ int main(int argc, char** argv)
 	}
 
 	printf("opening winlog in process\n");
-	HANDLE winlogin = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, winlogonpid);// 1452);
+	HANDLE winlogin = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, winlogonpid);
 	if (winlogin == NULL) {
 		printf("Open winlogin process handle failed, %d\n", GetLastError());
 		return 0;
@@ -59,8 +59,6 @@ int main(int argc, char** argv)
 	//TOKEN_ADJUST_PRIVILEGES
 	printf("duplicating winlogin token\n");
 	HANDLE dupToken = NULL;
-	//ret = DuplicateToken(winloginToken, SecurityImpersonation, &dupToken);
-	//ret = DuplicateTokenEx(winloginToken, TOKEN_IMPERSONATE | TOKEN_ADJUST_PRIVILEGES, NULL, SecurityImpersonation, TokenPrimary, &dupToken);
 	ret = DuplicateTokenEx(winloginToken, TOKEN_ALL_ACCESS, NULL, SecurityImpersonation, TokenPrimary, &dupToken);
 	if (ret == FALSE || dupToken == NULL) {
 		printf("duplicate winlogin process token failed, %d\n", GetLastError());
